@@ -1,8 +1,11 @@
 package com.example.app;
 
 import javafx.application.Application;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
@@ -15,14 +18,22 @@ import javafx.stage.Stage;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
+import java.util.stream.Collectors;
+
+import javafx.application.Platform;
 
 public class Main extends Application {
     private final TextField[] quantityFields = new TextField[5];
     private final TextField[] priceFields = new TextField[5];
     private final Label[] totalLabels = new Label[5];
-    private final CheckBox[] itemCheckBoxes = new CheckBox[5];
+    private final ArrayList<CheckBox> itemCheckBoxes = new ArrayList<>();
     private final Button[] buttons = new Button[4];
+
+    private final ArrayList<Item> selectedItems = new ArrayList<>();
+
     private Label totalSumLabel;
     private int totalSum = 0;
     private Scene scene;
@@ -30,6 +41,16 @@ public class Main extends Application {
     private String[] lastColors;
     private Color bgColor;
     private Color miscColor;
+
+    private static final double MAIN_STAGE_WIDTH = 415;
+    private static final double MAIN_STAGE_HEIGHT = 530;
+    private GridPane chosenItemsGrid;
+    private ScrollPane chosenItemsScrollPane;
+    private final ArrayList<TextField> chosenItemsPriceFields = new ArrayList<>();
+    private final ArrayList<TextField> chosenItemsQuantityFields = new ArrayList<>();
+    private final ArrayList<Label> chosenItemsSumLabels = new ArrayList<>();
+
+    private ItemList itemList = new ItemList();
 
     public int getTotalSum() {
         return totalSum;
@@ -39,60 +60,29 @@ public class Main extends Application {
         this.totalSum = totalSum;
     }
 
+    
     @Override
     public void start(Stage primaryStage) {
         loadSettings();
-        primaryStage.setTitle("Калькулятор Мякоти");
+        itemList.readItems();
+        loadSelectedItems();
+        primaryStage.setTitle("Калькулятор Мамонта");
         primaryStage.getIcons().add(new Image("/blue.png"));
         GridPane grid = new GridPane();
         grid.setPadding(new Insets(10));
         grid.setHgap(10);
         grid.setVgap(10);
-        String[] itemNames = {"Мякоть солевика", "Мякоть сластены", "Мякоть куборбуза", "Мякоть лимонника", "Аномальная Пыль"};
-        String[] headerNames = {"Товар", "Цена", "Количество", "Сумма"};
-        String[] itemImagePaths = {"/white.png", "/blue.png", "/red.png", "/yellow.png", "/dust.png"};
-        for (int i = 0; i < headerNames.length; i++) {
-            Label headerLabel = new Label(headerNames[i]);
-            grid.add(headerLabel, i+1, 0);
-        }
-        for (int i = 0; i < itemNames.length; i++) {
-            int k = -1;
-            itemCheckBoxes[i] = new CheckBox();
-            ImageView icon = new ImageView(new Image(itemImagePaths[i]));
-            Tooltip.install(icon, new Tooltip(itemNames[i]));
-            icon.setFitWidth(36);
-            icon.setFitHeight(36);
-            if (lastPrices != null ){
-                if (lastPrices[i] != null){
-                    priceFields[i] = new TextField(lastPrices[i]);
-                }
-
-            } else {
-                priceFields[i] = new TextField("");
-            }
-            priceFields[i].setPrefWidth(75);
-            quantityFields[i] = new TextField("");
-            quantityFields[i].setPrefWidth(75);
-            totalLabels[i] = new Label("0");
-            grid.add(itemCheckBoxes[i], ++k, i + 1);
-            grid.add(icon, ++k, i + 1);
-            grid.add(priceFields[i], ++k, i +  1);
-            grid.add(quantityFields[i], ++k, i + 1);
-            grid.add(totalLabels[i], ++k, i + 1);
-        }
-
-        Button calculateButton = new Button("Рассчитать");
         Button clearButton = new Button("Очистить");
         Button copyButton = new Button("Скопировать");
         Button msgButton = new Button("Сообщение");
-        buttons[0] = calculateButton;
-        buttons[1] = clearButton;
-        buttons[2] = copyButton;
-        buttons[3] = msgButton;
+        clearButton.setPrefWidth(120);
+        msgButton.setPrefWidth(120);
+        buttons[0] = clearButton;
+        buttons[1] = copyButton;
+        buttons[2] = msgButton;
 
         totalSumLabel = new Label("Общая сумма: 0");
 
-        calculateButton.setOnAction(e -> calculateTotal());
         clearButton.setOnAction(e -> clearFields());
         copyButton.setOnAction(e -> copySum(String.valueOf(getTotalSum())));
         msgButton.setOnAction(e -> generateMessage());
@@ -101,22 +91,28 @@ public class Main extends Application {
         colorBtnIcon.setFitHeight(24);
         Button colorBtn = new Button("", colorBtnIcon);
         colorBtn.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
-        colorBtn.setOnAction(e -> openColorSelectionWindow());
+        colorBtn.setOnAction(e -> openColorSelectionWindow(primaryStage.getX(), primaryStage.getY()));
         GridPane btnGrid = new GridPane();
-        btnGrid.setHgap(11);
-        btnGrid.add(colorBtn, 0, totalLabels.length + 1);
-        btnGrid.add(msgButton, 1, totalLabels.length + 1);
-        btnGrid.add(clearButton, 4, totalLabels.length + 1);
-        btnGrid.add(calculateButton, 5, totalLabels.length + 1);
+        btnGrid.setHgap(15);
+        btnGrid.add(msgButton, 0, totalLabels.length + 1);
+        btnGrid.add(colorBtn, 1, totalLabels.length + 1);
+        btnGrid.add(clearButton, 2, totalLabels.length + 1);
+        btnGrid.setAlignment(Pos.CENTER);
+        
+        // Initialize the scrollGrid and create the table with fixed header
+        Button addItemsButton = new Button("Добавить предмет");
+        addItemsButton.setOnAction(e -> openItemPicker(primaryStage.getX(), primaryStage.getY()));
+        addItemsButton.setAlignment(Pos.CENTER);
+        addItemsButton.setPrefWidth(380);
+        chosenItemsGrid = createScrollGrid();
+        BorderPane tableWithFixedHeader = createTableWithFixedHeader(chosenItemsGrid);
 
-
-
-        VBox layout = new VBox(10, grid, btnGrid, totalSumLabel, copyButton);
+        VBox layout = new VBox(10, tableWithFixedHeader, addItemsButton, btnGrid, totalSumLabel, copyButton);
         layout.setPadding(new Insets(20));
         layout.setAlignment(Pos.CENTER);
 
 
-        scene = new Scene(layout, 370, 400);
+        scene = new Scene(layout, MAIN_STAGE_WIDTH, MAIN_STAGE_HEIGHT);
         primaryStage.setScene(scene);
         primaryStage.setResizable(false);
         primaryStage.show();
@@ -126,49 +122,311 @@ public class Main extends Application {
         // Applying saved color for the background
         if (bgColor != null){
             scene.getRoot().setStyle("-fx-background-color: " + toRgb(bgColor));
+            chosenItemsScrollPane.setStyle("-fx-background-color: " + "black");
         }
         // Applying saved color for all the buttons and text fields
         if (miscColor != null){
-            String miscColorStyle = "-fx-background-color: " + toRgb(miscColor);
-            for (Button btn : buttons) {
-                btn.setStyle(miscColorStyle);
-            }
-            for (TextField field : priceFields) {
-                field.setStyle(miscColorStyle);
-            }
-            for (TextField field : quantityFields) {
-                field.setStyle(miscColorStyle);
-            }
-            for (CheckBox checkBox : itemCheckBoxes){
-                checkBox.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
-                checkBox.lookup(".box").setStyle(miscColorStyle);
+            String tableColorStyle = "-fx-background-color: " + toRgb(miscColor);
+            chosenItemsScrollPane.setStyle("-fx-background-color: " + "black;" + "-fx-background: " + toRgb(miscColor));
+            chosenItemsGrid.setStyle(tableColorStyle);
+            // Apply the same style to the header grid
+        }
+        rebuildItemsGrid();
+    }
+
+    GridPane createScrollGrid() {
+        GridPane scrollGrid = new GridPane();
+        scrollGrid.setPadding(new Insets(10));
+        scrollGrid.setHgap(10);
+        scrollGrid.setVgap(10);
+        // No header in this grid anymore, it will only contain items
+        return scrollGrid;
+    }
+    
+    GridPane createHeaderGrid() {
+        GridPane headerGrid = new GridPane();
+        headerGrid.setPadding(new Insets(10));
+        headerGrid.setHgap(10);
+        String[] headerNames = {"Товар", "Цена", "Количество", "Сумма"};
+        Label item = new Label(headerNames[0]);
+        Label price = new Label(headerNames[1]);
+        Label quantity = new Label(headerNames[2]);
+        Label sum = new Label(headerNames[3]);
+        item.setPrefWidth(40);
+        price.setPrefWidth(80);
+        quantity.setPrefWidth(80);
+        sum.setPrefWidth(60);
+        headerGrid.add(item, 0, 0);
+        headerGrid.add(price, 1, 0);
+        headerGrid.add(quantity, 2, 0);
+        headerGrid.add(sum, 3, 0);
+        
+        return headerGrid;
+    }
+
+
+    BorderPane createTableWithFixedHeader(GridPane contentGrid){
+        // Create a BorderPane to hold both the header and scrollable content
+        BorderPane tablePane = new BorderPane();
+        
+        // Create the header grid and add it to the top of the BorderPane
+        GridPane headerGrid = createHeaderGrid();
+        tablePane.setTop(headerGrid);
+        
+        // Create the ScrollPane for the content and add it to the center of the BorderPane
+        ScrollPane scrollPane = new ScrollPane();
+        scrollPane.setContent(contentGrid);
+        scrollPane.setFitToWidth(false);
+        scrollPane.setPrefHeight(375);
+        tablePane.setCenter(scrollPane);
+        // Store the ScrollPane reference for later use
+        chosenItemsScrollPane = scrollPane;
+        
+        return tablePane;
+    }
+    private void addItem(Item item){
+        if (chosenItemsGrid == null) {
+
+            chosenItemsGrid = createScrollGrid();
+            createTableWithFixedHeader(chosenItemsGrid);
+        }
+        
+        int existingIndex = selectedItems.indexOf(item);
+        if (existingIndex == -1) { // Item not in list yet
+            selectedItems.add(item);
+            int row = selectedItems.size() - 1; // Row index is now 0-based (no header row in content)
+
+            // Create UI elements for the item
+            ImageView itemIcon = new ImageView(item.getIcon());
+            itemIcon.setFitWidth(32);
+            itemIcon.setFitHeight(32);
+            Tooltip.install(itemIcon, new Tooltip(item.getItemName()));
+
+            TextField priceField = new TextField(item.getPrice().toString());
+            priceField.setPrefWidth(80);
+            chosenItemsPriceFields.add(priceField);
+
+            TextField quantityField = new TextField("");
+            quantityField.setPrefWidth(80);
+            chosenItemsQuantityFields.add(quantityField);
+
+            Label sumLabel = new Label("0");
+            chosenItemsSumLabels.add(sumLabel);
+
+            // Add change listeners to update sum
+            priceField.textProperty().addListener((observable, oldValue, newValue) -> {
+                int itemIndex = selectedItems.indexOf(item);
+                updateItemSum(itemIndex);
+                calculateChosenItemsTotal();
+
+                // Update the original item's price in the ItemList
+                try {
+                    int newPrice = Integer.parseInt(newValue);
+                    // Update the item in the selectedItems list
+                    selectedItems.get(itemIndex).setPrice(newPrice);
+
+                    // Find and update the same item in the global ItemList
+                    for (Item listItem : itemList.listOfItems) {
+                        if (listItem.getItemID().equals(item.getItemID())) {
+                            listItem.setPrice(newPrice);
+                            break;
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    // Invalid price format, do nothing
+                }
+            });
+
+            quantityField.textProperty().addListener((observable, oldValue, newValue) -> {
+                updateItemSum(selectedItems.indexOf(item));
+                calculateChosenItemsTotal();
+            });
+
+            // Add checkbox instead of remove button
+            CheckBox itemCheckBox = new CheckBox();
+            itemCheckBox.setSelected(false); // Default to unselected
+
+            chosenItemsGrid.add(itemCheckBox, 0, row);
+            chosenItemsGrid.add(itemIcon, 1, row);
+            chosenItemsGrid.add(priceField, 2, row);
+            chosenItemsGrid.add(quantityField, 3, row);
+            chosenItemsGrid.add(sumLabel, 4, row);
+
+        }
+        rebuildItemsGrid();
+    }
+    
+    private void updateItemSum(int index) {
+        if (index >= 0 && index < selectedItems.size()) {
+            try {
+                int price = Integer.parseInt(chosenItemsPriceFields.get(index).getText());
+                int quantity = Integer.parseInt(chosenItemsQuantityFields.get(index).getText());
+                int sum = price * quantity;
+                chosenItemsSumLabels.get(index).setText(String.valueOf(sum));
+            } catch (NumberFormatException e) {
+                chosenItemsSumLabels.get(index).setText("0");
             }
         }
     }
 
-    private void calculateTotal() {
-        setTotalSum(0);
-        for (int i = 0; i < quantityFields.length; i++) {
+    private void removeItem(int index) {
+        // Remove the item at the specified index
+        if (index >= 0 && index < selectedItems.size()) {
+            selectedItems.remove(index);
+            chosenItemsPriceFields.remove(index);
+            chosenItemsQuantityFields.remove(index);
+            chosenItemsSumLabels.remove(index);
+            
+            // Rebuild the grid and recalculate total
+            rebuildItemsGrid();
+            calculateChosenItemsTotal();
+        }
+    }
+
+    
+    private void rebuildItemsGrid() {
+        chosenItemsGrid.getChildren().clear();
+        int row = 0;
+        // Re-add all items (no headers in the content grid anymore)
+        for (int i = 0; i < selectedItems.size(); i++) {
+            Item currentItem = selectedItems.get(i);
+            row = i; // Start from row 0 since there's no header row in the content grid
+            ImageView deleteIcon = new ImageView(new Image("/deleteIcon.png"));
+            deleteIcon.setFitWidth(20);
+            deleteIcon.setFitHeight(20);
+            Button removeButton = new Button("", deleteIcon);
+            removeButton.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
+            final int index = i; // Need final variable for lambda
+            removeButton.setOnAction(e -> removeItem(index));
+            removeButton.setTooltip(new Tooltip("Удалить предмет"));
+            
+            ImageView itemIcon = new ImageView(currentItem.getIcon());
+            itemIcon.setFitWidth(40);
+            itemIcon.setFitHeight(40);
+            Tooltip.install(itemIcon, new Tooltip(currentItem.getItemName()));
+
+            chosenItemsGrid.add(itemIcon, 0, row);
+            chosenItemsPriceFields.get(i).setPrefWidth(80);
+            chosenItemsGrid.add(chosenItemsPriceFields.get(i), 1, row);
+            chosenItemsQuantityFields.get(i).setPrefWidth(80);
+            chosenItemsGrid.add(chosenItemsQuantityFields.get(i), 2, row);
+            chosenItemsSumLabels.get(i).setPrefWidth(60);
+            chosenItemsGrid.add(chosenItemsSumLabels.get(i), 3, row);
+            chosenItemsGrid.add(removeButton, 4, row);
+        }
+    }
+    
+    private void calculateChosenItemsTotal() {
+        int total = 0;
+        for (Label sumLabel : chosenItemsSumLabels) {
             try {
-                int price = Integer.parseInt(priceFields[i].getText());
-                int quantity = Integer.parseInt(quantityFields[i].getText());
-                int total = quantity * price;
-                totalLabels[i].setText(String.valueOf(total));
-                totalSum += total;
+                total += Integer.parseInt(sumLabel.getText());
             } catch (NumberFormatException e) {
-                totalLabels[i].setText("0");
+                // Skip invalid values
             }
         }
-        totalSumLabel.setText("Общая сумма: " + getTotalSum());
+        totalSumLabel.setText("Общая сумма: " + total);
+        setTotalSum(total);
     }
+
+    private void openItemPicker(double mainStageX, double mainStageY) {
+        Stage pickerStage = new Stage();
+        pickerStage.setTitle("Выбор предмета");
+        pickerStage.getIcons().add(new Image("/itemSearch.png"));
+        pickerStage.initModality(Modality.APPLICATION_MODAL);
+        pickerStage.setX(mainStageX + MAIN_STAGE_WIDTH);
+        pickerStage.setY(mainStageY);
+        TextField searchField = new TextField();
+        searchField.setPromptText("Поиск по названию...");
+
+        ListView<HBox> itemListview = new ListView<>();
+        ObservableList<HBox> itemObservableList = FXCollections.observableArrayList();
+        
+        // Keep track of which items are displayed in the ListView
+        List<Item> displayedItems = new ArrayList<>();
+        
+        // Populate initial list
+        for (Item item : itemList.listOfItems) {
+            HBox itemBox = new HBox(10);
+            itemBox.setAlignment(Pos.CENTER_LEFT);
+
+            ImageView itemIcon = new ImageView(item.getIcon());
+            itemIcon.setFitWidth(48);
+            itemIcon.setFitHeight(48);
+
+            Label itemName = new Label(item.getItemName());
+            itemBox.getChildren().addAll(itemIcon, itemName);
+            itemObservableList.add(itemBox);
+            displayedItems.add(item);
+        }
+
+        itemListview.setItems(itemObservableList);
+        searchField.textProperty().addListener((observable, oldValue, newValue) -> {
+            // Clear the current displayed items list
+            displayedItems.clear();
+            
+            // Filter items based on search text
+            List<Item> filteredItemsList = itemList.listOfItems.stream()
+                    .filter(item -> item.getItemName().toLowerCase().contains(newValue.toLowerCase()))
+                    .collect(Collectors.toList());
+            
+            // Create HBox representations for filtered items
+            List<HBox> filteredHBoxes = filteredItemsList.stream()
+                    .map(item -> {
+                        HBox itemBox = new HBox(10);
+                        itemBox.setAlignment(Pos.CENTER_LEFT);
+                        ImageView itemIcon = new ImageView(item.getIcon());
+                        itemIcon.setFitWidth(48);
+                        itemIcon.setFitHeight(48);
+
+                        Label itemName = new Label(item.getItemName());
+                        itemBox.getChildren().addAll(itemIcon, itemName);
+                        return itemBox;
+                    })
+                    .collect(Collectors.toList());
+            
+            // Update the displayed items list with filtered items
+            displayedItems.addAll(filteredItemsList);
+            
+            // Update the ListView
+            itemObservableList.setAll(filteredHBoxes);
+        });
+
+        Button selectButton = new Button("Добавить");
+        selectButton.setOnAction(e -> {
+            int selectedIndex = itemListview.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0 && selectedIndex < displayedItems.size()) {
+                // Get the item from our tracked list of displayed items
+                Item selectedItem = displayedItems.get(selectedIndex);
+                addItem(selectedItem);
+                System.out.println("✅ Added: " + selectedItem.getItemName());
+                pickerStage.close();
+            }
+        });
+
+        VBox layout = new VBox(10, searchField, itemListview, selectButton);
+        layout.setPadding(new Insets(10));
+        layout.setAlignment(Pos.CENTER);
+        Scene scene = new Scene(layout, 400, 500);
+        pickerStage.setScene(scene);
+        pickerStage.showAndWait();
+    }
+
 
     private void clearFields() {
-        for (TextField field : quantityFields) {
-            field.setText("");
+        // Only clear quantity fields in chosen items
+        if (chosenItemsGrid != null) {
+            // Clear only the quantity fields
+            for (TextField quantityField : chosenItemsQuantityFields) {
+                quantityField.setText("");
+            }
+            
+            // Reset sum labels to 0
+            for (Label sumLabel : chosenItemsSumLabels) {
+                sumLabel.setText("0");
+            }
         }
-        for (Label label : totalLabels) {
-            label.setText("0");
-        }
+        
         setTotalSum(0);
         totalSumLabel.setText("Общая сумма: " + getTotalSum());
     }
@@ -181,17 +439,34 @@ public class Main extends Application {
     }
 
     private void generateMessage() {
-        String[] listOfItems = {"Мякоть солевика", "Мякоть сластены", "Мякоть куборбуза", "Мякоть лимонника", "Аномальная пыль"};
         StringBuilder msg = new StringBuilder("СКУПАЮ");
-
-        for (int i = 0; i < listOfItems.length; i++) {
-            if (itemCheckBoxes[i].isSelected()) {  // Only include selected items
-                msg.append(" [").append(listOfItems[i]).append("]").append(formatNumber(Integer.parseInt(priceFields[i].getText())));
+        //Get all checkboxes from the grid for chosen items
+        List<CheckBox> checkBoxes = new ArrayList<>();
+        
+        // Find all checkboxes in the grid
+        for (Node node : chosenItemsGrid.getChildren()) {
+            if (node instanceof CheckBox) {
+                checkBoxes.add((CheckBox) node);
+            }
+        }
+        
+        // Add chosen items that have their checkbox selected
+        for (int i = 0; i < selectedItems.size(); i++) {
+            // Skip header row checkbox (index 0)
+            if (i < checkBoxes.size() && checkBoxes.get(i).isSelected()) {
+                Item item = selectedItems.get(i);
+                try {
+                    int price = Integer.parseInt(chosenItemsPriceFields.get(i).getText());
+                    msg.append(" [").append(item.getItemName()).append("]").append(formatNumber(price));
+                } catch (NumberFormatException e) {
+                    // Skip items with invalid price
+                }
             }
         }
         msg.append(" [Вступайте в мой отряд]!!!!!");
         copySum(msg.toString());
     }
+
     private String formatNumber(int num) {
         if (num >= 1000) {
             double shortNum = num / 1000.0;
@@ -200,20 +475,24 @@ public class Main extends Application {
         return String.valueOf(num);
     }
 
-    private void openColorSelectionWindow() {
+    private void openColorSelectionWindow(double mainStageX, double mainStageY) {
+        double colorStageWidth = 250;
+        double colorStageHeight = 200;
         Stage colorStage = new Stage();
         colorStage.setTitle("Выбор цвета");
+        colorStage.setX(mainStageX - colorStageWidth);
+        colorStage.setY(mainStageY);
         colorStage.getIcons().add(new Image("/colorPicker.png"));
         RadioButton bgColorOption = new RadioButton("Фон");
-        RadioButton elementsColorOption = new RadioButton("Элементы (кнопки и поля)");
+        RadioButton tableColorOption = new RadioButton("Фон таблицы");
         ToggleGroup toggleGroup = new ToggleGroup();
         bgColorOption.setToggleGroup(toggleGroup);
-        elementsColorOption.setToggleGroup(toggleGroup);
+        tableColorOption.setToggleGroup(toggleGroup);
         bgColorOption.setSelected(true);
         ColorPicker colorPicker = new ColorPicker();
         colorPicker.setValue(bgColor);
         bgColorOption.setOnAction(e -> colorPicker.setValue(bgColor));
-        elementsColorOption.setOnAction(e -> colorPicker.setValue(miscColor));
+        tableColorOption.setOnAction(e -> colorPicker.setValue(miscColor));
         Button applyButton = new Button("Применить");
         Button resetButton = new Button("Сбросить");
         applyButton.setOnAction(e -> {
@@ -221,22 +500,18 @@ public class Main extends Application {
             String colorStyle = "-fx-background-color: " + toRgb(selectedColor);
             if (bgColorOption.isSelected()) {
                 bgColor = selectedColor;
+                if (miscColor == null){
+                    chosenItemsScrollPane.setStyle("-fx-background-color: " + "black");
+                } else {
+                    chosenItemsScrollPane.setStyle("-fx-background-color: " + "black;" + "-fx-background: " + toRgb(miscColor));
+                }
+
                 scene.getRoot().setStyle(colorStyle);
             } else {
                 miscColor = selectedColor;
-                for (Button btn : buttons) {
-                    btn.setStyle(colorStyle);
-                }
-                for (TextField field : priceFields) {
-                    field.setStyle(colorStyle);
-                }
-                for (TextField field : quantityFields) {
-                    field.setStyle(colorStyle);
-                }
-                for (CheckBox checkBox : itemCheckBoxes){
-                    checkBox.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
-                    checkBox.lookup(".box").setStyle(colorStyle);
-                }
+                chosenItemsScrollPane.setStyle("-fx-background-color: " + "black;" + "-fx-background: " + toRgb(miscColor));
+                chosenItemsGrid.setStyle(colorStyle);
+
             }
             colorStage.close();
         });
@@ -244,28 +519,18 @@ public class Main extends Application {
         resetButton.setOnAction(e -> {
             String colorStyle = "-fx-background-color: " + "white";
             scene.getRoot().setStyle(colorStyle);
-            for (Button btn : buttons) {
-                btn.setStyle("");
-            }
-            for (TextField field : priceFields) {
-                field.setStyle("");
-            }
-            for (TextField field : quantityFields) {
-                field.setStyle("");
-            }
-            for (CheckBox checkBox : itemCheckBoxes){
-                checkBox.lookup(".box").setStyle("");
-            }
+            chosenItemsScrollPane.setStyle("");
+            chosenItemsGrid.setStyle("");
             bgColor = null;
             miscColor = null;
             colorStage.close();
         });
 
-        VBox popupLayout = new VBox(10, bgColorOption, elementsColorOption, colorPicker, applyButton, resetButton);
+        VBox popupLayout = new VBox(10, bgColorOption, tableColorOption, colorPicker, applyButton, resetButton);
         popupLayout.setPadding(new Insets(10));
         popupLayout.setAlignment(Pos.CENTER_LEFT);
 
-        Scene popupScene = new Scene(popupLayout, 250, 200);
+        Scene popupScene = new Scene(popupLayout, colorStageWidth, colorStageHeight);
         colorStage.setScene(popupScene);
         colorStage.initModality(Modality.APPLICATION_MODAL);
         colorStage.showAndWait();
@@ -279,45 +544,69 @@ public class Main extends Application {
     }
 
     private void saveSettings(){
-        try(FileWriter writer = new FileWriter("save.txt", false)) {
-            for (TextField price : priceFields){
-                if (price.getText().equals("")){
-                    writer.write(0 );
+        // Update prices in the ItemList before saving
+        for (int i = 0; i < selectedItems.size(); i++) {
+            Item selectedItem = selectedItems.get(i);
+            try {
+                int newPrice = Integer.parseInt(chosenItemsPriceFields.get(i).getText());
+                // Find and update the same item in the global ItemList
+                for (Item listItem : itemList.listOfItems) {
+                    if (listItem.getItemID().equals(selectedItem.getItemID())) {
+                        listItem.setPrice(newPrice);
+                        break;
+                    }
                 }
-                writer.write(price.getText() + " ");
+            } catch (NumberFormatException e) {
+                // Invalid price format, do nothing
             }
+        }
+        
+        // Save all items to file
+        itemList.writeItems();
+        
+        // Save selected items
+        saveSelectedItems();
+        
+        // Save color settings
+        try(FileWriter writer = new FileWriter("save.txt", false)) {
             if(miscColor == null && bgColor == null){
-                writer.write("\ndefault default");
+                writer.write("default default");
             }
             else if (bgColor == null){
-                writer.write("\ndefault " + miscColor);
+                writer.write("default " + miscColor);
             } else if (miscColor == null){
-                writer.write("\n"+ bgColor + " default");
+                writer.write(bgColor + " default");
             } else{
-                writer.write("\n" + bgColor + " " + miscColor);
+                writer.write(bgColor + " " + miscColor);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
+    }
+    
+    private void saveSelectedItems() {
+        try (FileWriter writer = new FileWriter("pickeditems.txt", false)) {
+            for (Item item : selectedItems) {
+                writer.write(item.getItemID() + "\n");
+            }
+        } catch (IOException e) {
+            System.err.println("Error saving selected items: " + e.getMessage());
+        }
     }
 
     private void loadSettings(){
         File savedSettings = new File("save.txt");
         if (savedSettings.exists()){
-            String pricesLine = null;
             String colorsLine = null;
             try {
                 Scanner lastSaveScanner = new Scanner(new File("save.txt"));
                 while(lastSaveScanner.hasNext()) {
-                    pricesLine = lastSaveScanner.nextLine();
                     colorsLine = lastSaveScanner.nextLine();
                 }
             } catch (FileNotFoundException e) {
                 throw new RuntimeException(e);
             }
-            if (pricesLine != null && colorsLine != null){
-                lastPrices = pricesLine.split(" ");
+            if (colorsLine != null){
                 lastColors = colorsLine.split(" ");
                 if(lastColors[0].equals("default") && lastColors[1].equals("default")){
                     bgColor = null;
@@ -333,8 +622,28 @@ public class Main extends Application {
                     miscColor = Color.valueOf(lastColors[1]);
                 }
             }
-
         }
+    }
+    
+    private void loadSelectedItems() {
+        File savedItems = new File("pickeditems.txt");
+        if (savedItems.exists()) {
+            try (Scanner scanner = new Scanner(savedItems)) {
+                while (scanner.hasNextLine()) {
+                    String itemId = scanner.nextLine().trim();
+                    // Find the item in the global item list
+                    for (Item item : ItemList.listOfItems) {
+                        if (item.getItemID().equals(itemId)) {
+                            addItem(item);
+                            break;
+                        }
+                    }
+                }
+            } catch (FileNotFoundException e) {
+                System.err.println("Error loading selected items: " + e.getMessage());
+            }
+        }
+        rebuildItemsGrid();
     }
 
     public static void main(String[] args) {
