@@ -26,19 +26,13 @@ import java.util.stream.Collectors;
 import javafx.application.Platform;
 
 public class Main extends Application {
-    private final TextField[] quantityFields = new TextField[5];
-    private final TextField[] priceFields = new TextField[5];
     private final Label[] totalLabels = new Label[5];
-    private final ArrayList<CheckBox> itemCheckBoxes = new ArrayList<>();
-    private final Button[] buttons = new Button[4];
 
     private final ArrayList<Item> selectedItems = new ArrayList<>();
 
     private Label totalSumLabel;
     private int totalSum = 0;
     private Scene scene;
-    private String[] lastPrices;
-    private String[] lastColors;
     private Color bgColor;
     private Color miscColor;
 
@@ -50,7 +44,7 @@ public class Main extends Application {
     private final ArrayList<TextField> chosenItemsQuantityFields = new ArrayList<>();
     private final ArrayList<Label> chosenItemsSumLabels = new ArrayList<>();
 
-    private ItemList itemList = new ItemList();
+    private final ItemList itemList = new ItemList();
 
     public int getTotalSum() {
         return totalSum;
@@ -77,9 +71,7 @@ public class Main extends Application {
         Button msgButton = new Button("Сообщение");
         clearButton.setPrefWidth(120);
         msgButton.setPrefWidth(120);
-        buttons[0] = clearButton;
-        buttons[1] = copyButton;
-        buttons[2] = msgButton;
+
 
         totalSumLabel = new Label("Общая сумма: 0");
 
@@ -226,7 +218,7 @@ public class Main extends Application {
                     selectedItems.get(itemIndex).setPrice(newPrice);
 
                     // Find and update the same item in the global ItemList
-                    for (Item listItem : itemList.listOfItems) {
+                    for (Item listItem : ItemList.listOfItems) {
                         if (listItem.getItemID().equals(item.getItemID())) {
                             listItem.setPrice(newPrice);
                             break;
@@ -346,7 +338,7 @@ public class Main extends Application {
         List<Item> displayedItems = new ArrayList<>();
         
         // Populate initial list
-        for (Item item : itemList.listOfItems) {
+        for (Item item : ItemList.listOfItems) {
             HBox itemBox = new HBox(10);
             itemBox.setAlignment(Pos.CENTER_LEFT);
 
@@ -366,9 +358,9 @@ public class Main extends Application {
             displayedItems.clear();
             
             // Filter items based on search text
-            List<Item> filteredItemsList = itemList.listOfItems.stream()
+            List<Item> filteredItemsList = ItemList.listOfItems.stream()
                     .filter(item -> item.getItemName().toLowerCase().contains(newValue.toLowerCase()))
-                    .collect(Collectors.toList());
+                    .toList();
             
             // Create HBox representations for filtered items
             List<HBox> filteredHBoxes = filteredItemsList.stream()
@@ -550,7 +542,7 @@ public class Main extends Application {
             try {
                 int newPrice = Integer.parseInt(chosenItemsPriceFields.get(i).getText());
                 // Find and update the same item in the global ItemList
-                for (Item listItem : itemList.listOfItems) {
+                for (Item listItem : ItemList.listOfItems) {
                     if (listItem.getItemID().equals(selectedItem.getItemID())) {
                         listItem.setPrice(newPrice);
                         break;
@@ -607,7 +599,7 @@ public class Main extends Application {
                 throw new RuntimeException(e);
             }
             if (colorsLine != null){
-                lastColors = colorsLine.split(" ");
+                String[] lastColors = colorsLine.split(" ");
                 if(lastColors[0].equals("default") && lastColors[1].equals("default")){
                     bgColor = null;
                     miscColor = null;
