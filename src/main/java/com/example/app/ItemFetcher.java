@@ -23,6 +23,10 @@ public class ItemFetcher implements Runnable {
     private static final String LOCAL_DATA_FILE = "items.txt";
     private static final String LOCAL_ICONS_FOLDER = "icons/";
 
+    private static final String[] ADDITIONAL_ITEMS = {
+            "y3nmw", "4q7pl", "l0og1", "4q7pl"
+    };
+
     public void run() {
         new File(LOCAL_ICONS_FOLDER).mkdir(); // Ensure icons folder exists
         System.out.println("🔄 Fetching items from recipes...");
@@ -87,6 +91,15 @@ public class ItemFetcher implements Runnable {
                 System.out.println("📦 Progress: " + processedRecipes + "/" + totalRecipes + " recipes processed.");
             }
 
+            for (String itemId : ADDITIONAL_ITEMS){
+                if (uniqueItems.add(itemId)) {
+                    String[] fetchItemNameResult = fetchItemName(itemId);
+                    itemData.add(itemId + " : " + fetchItemNameResult[0] + " : 0");
+                    System.out.println("✅ Fetched: " + itemId + " → " + fetchItemNameResult[0]);
+                    fetchItemIcon(itemId, fetchItemNameResult[1]);
+                }
+
+            }
             saveToFile(LOCAL_DATA_FILE, itemData);
 
         } catch (Exception e) {

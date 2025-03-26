@@ -23,8 +23,6 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 
-import javafx.application.Platform;
-
 public class Main extends Application {
     private final Label[] totalLabels = new Label[5];
 
@@ -76,8 +74,8 @@ public class Main extends Application {
         totalSumLabel = new Label("Общая сумма: 0");
 
         clearButton.setOnAction(e -> clearFields());
-        copyButton.setOnAction(e -> copySum(String.valueOf(getTotalSum())));
-        msgButton.setOnAction(e -> generateMessage());
+        copyButton.setOnAction(e -> copyText(String.valueOf(getTotalSum())));
+        msgButton.setOnAction(e -> openMessageGenerator(primaryStage.getX(), primaryStage.getY()));
         ImageView colorBtnIcon = new ImageView(new Image("/colorPicker.png"));
         colorBtnIcon.setFitWidth(24);
         colorBtnIcon.setFitHeight(24);
@@ -108,9 +106,7 @@ public class Main extends Application {
         primaryStage.setScene(scene);
         primaryStage.setResizable(false);
         primaryStage.show();
-        primaryStage.setOnCloseRequest(e -> {
-            saveSettings();
-        });
+        primaryStage.setOnCloseRequest(e -> saveSettings());
         // Applying saved color for the background
         if (bgColor != null){
             scene.getRoot().setStyle("-fx-background-color: " + toRgb(bgColor));
@@ -277,7 +273,11 @@ public class Main extends Application {
 
     
     private void rebuildItemsGrid() {
-        chosenItemsGrid.getChildren().clear();
+        try {
+            chosenItemsGrid.getChildren().clear();
+        } catch (Exception e){
+            //
+        }
         int row = 0;
         // Re-add all items (no headers in the content grid anymore)
         for (int i = 0; i < selectedItems.size(); i++) {
@@ -391,7 +391,6 @@ public class Main extends Application {
                 // Get the item from our tracked list of displayed items
                 Item selectedItem = displayedItems.get(selectedIndex);
                 addItem(selectedItem);
-                System.out.println("✅ Added: " + selectedItem.getItemName());
                 pickerStage.close();
             }
         });
@@ -423,40 +422,88 @@ public class Main extends Application {
         totalSumLabel.setText("Общая сумма: " + getTotalSum());
     }
 
-    private void copySum(String text) {
+    private void copyText(String text) {
         Clipboard clipboard = Clipboard.getSystemClipboard();
         ClipboardContent content = new ClipboardContent();
         content.putString(text);
         clipboard.setContent(content);
     }
 
-    private void generateMessage() {
+    private void generateGameMessage(GridPane msgGrid) {
         StringBuilder msg = new StringBuilder("СКУПАЮ");
-        //Get all checkboxes from the grid for chosen items
-        List<CheckBox> checkBoxes = new ArrayList<>();
-        
-        // Find all checkboxes in the grid
-        for (Node node : chosenItemsGrid.getChildren()) {
-            if (node instanceof CheckBox) {
-                checkBoxes.add((CheckBox) node);
-            }
-        }
-        
-        // Add chosen items that have their checkbox selected
-        for (int i = 0; i < selectedItems.size(); i++) {
-            // Skip header row checkbox (index 0)
-            if (i < checkBoxes.size() && checkBoxes.get(i).isSelected()) {
-                Item item = selectedItems.get(i);
+        ObservableList<Node> gridChildren = msgGrid.getChildren();
+        for (int i = 0; i < gridChildren.size(); i++) {
+            String itemName = "";
+            Integer itemPrice= 0;
+            Integer row = GridPane.getRowIndex(gridChildren.get(i));
+            Integer column = GridPane.getColumnIndex(gridChildren.get(i));
+            if(column == 0 && ((CheckBox)gridChildren.get(i)).isSelected()) {
+                itemName = selectedItems.get(row).getItemName();
+                itemPrice = selectedItems.get(row).getPrice();
                 try {
-                    int price = Integer.parseInt(chosenItemsPriceFields.get(i).getText());
-                    msg.append(" [").append(item.getItemName()).append("]").append(formatNumber(price));
+                    msg.append(" [").append(itemName).append("]").append(formatNumber(itemPrice));
                 } catch (NumberFormatException e) {
                     // Skip items with invalid price
                 }
             }
         }
-        msg.append(" [Вступайте в мой отряд]!!!!!");
-        copySum(msg.toString());
+        msg.append("[Вступайте в мой отряд]!!!!!");
+        copyText(msg.toString());
+    }
+
+    private void openMessageGenerator(double mainStageX, double mainStageY){
+        double msgStageWidth = 300;
+        double msgStageHeight = 380;
+        Stage msgGeneratorStage = new Stage();
+        msgGeneratorStage.setTitle("Генератор Сообщений");
+        msgGeneratorStage.getIcons().add(new Image("/msgIcon.png"));
+        msgGeneratorStage.initModality(Modality.APPLICATION_MODAL);
+        msgGeneratorStage.setX(mainStageX - msgStageWidth);
+        msgGeneratorStage.setY(mainStageY + MAIN_STAGE_HEIGHT - msgStageHeight);
+        GridPane msgGrid = new GridPane();
+        msgGrid.setPadding(new Insets(10));
+        msgGrid.setHgap(20);
+        for (int i = 0; i < selectedItems.size(); i++) {
+            ImageView itemIcon = new ImageView(selectedItems.get(i).getIcon());
+            itemIcon.setFitWidth(48);
+            itemIcon.setFitHeight(48);
+            CheckBox itemSelect = new CheckBox();
+            itemSelect.setSelected(false);
+            msgGrid.add(itemSelect, 0, i);
+            msgGrid.add(itemIcon, 1, i);
+            msgGrid.add(new Label(selectedItems.get(i).getItemName()), 2, i);
+        }
+        ScrollPane msgScrollPane = new ScrollPane();
+        msgScrollPane.setFitToWidth(false);
+        msgScrollPane.setContent(msgGrid);
+        msgScrollPane.setPadding(new Insets(10));
+
+
+        ImageView scIcon = new ImageView(new Image("/scIcon.png"));
+        scIcon.setFitHeight(20);
+        scIcon.setFitWidth(20);
+        Button copyGameMessage = new Button("", scIcon); // button to copy message for the game chat
+        copyGameMessage.setPrefWidth(120);
+        copyGameMessage.setOnAction(e -> generateGameMessage(msgGrid));
+
+        ImageView dsIcon = new ImageView(new Image("/discordIcon.png"));
+        dsIcon.setFitHeight(20);
+        dsIcon.setFitWidth(20);
+        Button copyDiscordMessage = new Button("", dsIcon); //button to copy message for discord
+        copyDiscordMessage.setPrefWidth(120);
+        copyDiscordMessage.setOnAction(e -> generateGameMessage(msgGrid));
+
+        GridPane btnGrid = new GridPane();
+        btnGrid.setPadding(new Insets(10));
+        btnGrid.setHgap(20);
+        btnGrid.setAlignment(Pos.CENTER);
+        btnGrid.add(copyGameMessage, 0, 0);
+        btnGrid.add(copyDiscordMessage, 1, 0);
+
+        VBox msgWindow = new VBox(10, msgScrollPane, btnGrid);
+        Scene scene = new Scene(msgWindow, msgStageWidth, msgStageHeight);
+        msgGeneratorStage.setScene(scene);
+        msgGeneratorStage.showAndWait();
     }
 
     private String formatNumber(int num) {
@@ -635,7 +682,6 @@ public class Main extends Application {
                 System.err.println("Error loading selected items: " + e.getMessage());
             }
         }
-        rebuildItemsGrid();
     }
 
     public static void main(String[] args) {
