@@ -391,7 +391,6 @@ public class Main extends Application {
                 // Get the item from our tracked list of displayed items
                 Item selectedItem = displayedItems.get(selectedIndex);
                 addItem(selectedItem);
-                pickerStage.close();
             }
         });
 
