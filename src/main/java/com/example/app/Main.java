@@ -508,7 +508,7 @@ public class Main extends Application {
     private String formatNumber(int num) {
         if (num >= 1000) {
             double shortNum = num / 1000.0;
-            return (shortNum % 1 == 0) ? ((int) shortNum + "k") : (String.format("%.1fk", shortNum));
+            return String.format("%.3f", shortNum).replaceAll("0+$", "").concat("k");
         }
         return String.valueOf(num);
     }
