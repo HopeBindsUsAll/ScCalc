@@ -20,6 +20,7 @@ import javafx.scene.input.ClipboardContent;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 
@@ -508,7 +509,7 @@ public class Main extends Application {
     private String formatNumber(int num) {
         if (num >= 1000) {
             double shortNum = num / 1000.0;
-            String formatted = String.format("%.3f", shortNum).replaceAll("0+$", "");
+            String formatted = String.format(Locale.US ,"%.3f", shortNum).replaceAll("0+$", "");
             return formatted.endsWith(".") ? formatted.substring(0, formatted.length() - 1) + "k" : formatted + "k";
         }
         return String.valueOf(num);
